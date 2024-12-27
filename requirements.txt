@@ -2,3 +2,4 @@ numpy
 streamlit
 yfinance
 plotly
+seaborn
