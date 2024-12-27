@@ -1,0 +1,6 @@
+numpy
+streamlit
+yfinance
+plotly.express
+plotly.graph_objects
+datetime
