@@ -61,7 +61,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=300)  # Cache selama 5 menit
+@st.cache_data(ttl=300) 
 def get_real_time_data(ticker):
     """Mengambil data saham real-time dari Yahoo Finance"""
     try:
@@ -582,24 +582,7 @@ else:
                     '1mo': 30
                 }
                 start_date = end_date - pd.Timedelta(days=period_days[period])
-                filtered_df = df[df['Date'] >= start_date].copy()
-                
-                # Cek apakah data tersedia untuk periode yang dipilih
-                if filtered_df.empty:
-                    earliest_date = df['Date'].min()
-                    latest_date = df['Date'].max()
-                    st.warning(f"""
-                    ⚠️ Tidak ada data untuk periode yang dipilih: {selected_period}
-                    
-                    Data {selected_option} tersedia untuk periode:
-                    - Tanggal awal: {earliest_date.strftime('%d %B %Y')}
-                    - Tanggal akhir: {latest_date.strftime('%d %B %Y')}
-                    
-                    Silakan pilih periode yang sesuai dengan rentang data yang tersedia.
-                    """)
-                    st.stop()
-                    
-                df = filtered_df
+                df = df[df['Date'] >= start_date]
                 
             st.info(f"Menampilkan data untuk periode: {selected_period}")
 
@@ -608,161 +591,96 @@ else:
             
             # Metrics
             col1, col2, col3, col4 = st.columns(4)
-            if len(df) > 0:  # Pastikan ada data sebelum menghitung metrik
-                metrics = {
-                    'Harga Terakhir': df['Close'].iloc[-1],
-                    'Volume Rata-rata': df['Volume'].mean(),
-                    'Harga Tertinggi': df['High'].max(),
-                    'Harga Terendah': df['Low'].min()
-                }
-                
-                for col, (label, value) in zip([col1, col2, col3, col4], metrics.items()):
-                    with col:
-                        if 'Volume' in label:
-                            st.metric(label, f"{value:,.0f}")
-                        else:
-                            st.metric(label, f"Rp {value:,.2f}")
+            metrics = {
+                'Harga Terakhir': df['Close'].iloc[-1],
+                'Volume Rata-rata': df['Volume'].mean(),
+                'Harga Tertinggi': df['High'].max(),
+                'Harga Terendah': df['Low'].min()
+            }
+            
+            for col, (label, value) in zip([col1, col2, col3, col4], metrics.items()):
+                with col:
+                    if 'Volume' in label:
+                        st.metric(label, f"{value:,.0f}")
+                    else:
+                        st.metric(label, f"Rp {value:,.2f}")
 
-                # Tabs untuk analisis detail
-                tab1, tab2, tab3 = st.tabs(["📈 Analisis Teknikal", "📊 Analisis Volume", "💰 Analisis Dividen"])
+            # Tabs untuk analisis detail
+            tab1, tab2, tab3 = st.tabs(["📈 Analisis Teknikal", "📊 Analisis Volume", "💰 Analisis Dividen"])
 
-                with tab1:
-                    fig = go.Figure()
-                    fig.add_trace(go.Candlestick(
-                        x=df['Date'],
-                        open=df['Open'],
-                        high=df['High'],
-                        low=df['Low'],
-                        close=df['Close'],
-                        name=selected_option
-                    ))
+            with tab1:
+                # Candlestick chart
+                fig = go.Figure()
+                fig.add_trace(go.Candlestick(
+                    x=df['Date'],
+                    open=df['Open'],
+                    high=df['High'],
+                    low=df['Low'],
+                    close=df['Close'],
+                    name=selected_option
+                ))
 
-                    if show_ma:
-                        for period in ma_periods:
-                            if len(df) >= period:  # Cek apakah cukup data untuk MA
-                                ma = df['Close'].rolling(window=period).mean()
-                                fig.add_trace(go.Scatter(
-                                    x=df['Date'],
-                                    y=ma,
-                                    name=f'MA {period}',
-                                    line=dict(width=1)
-                                ))
-
-                    fig.update_layout(
-                        title=f"Grafik Harga {selected_option}",
-                        yaxis_title="Harga (Rp)",
-                        xaxis_title="Tanggal",
-                        height=600
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-
-                with tab2:
-                    if show_volume:
-                        st.subheader("Analisis Volume Transaksi")
-                        fig_vol = go.Figure()
-                        fig_vol.add_trace(go.Bar(
+                if show_ma:
+                    for period in ma_periods:
+                        ma = df['Close'].rolling(window=period).mean()
+                        fig.add_trace(go.Scatter(
                             x=df['Date'],
-                            y=df['Volume'],
-                            name="Volume"
+                            y=ma,
+                            name=f'MA {period}',
+                            line=dict(width=1)
                         ))
-                        fig_vol.update_layout(
-                            title=f"Volume Transaksi {selected_option}",
-                            yaxis_title="Volume",
-                            xaxis_title="Tanggal",
-                            height=400
+
+                fig.update_layout(
+                    title=f"Grafik Harga {selected_option}",
+                    yaxis_title="Harga (Rp)",
+                    xaxis_title="Tanggal",
+                    height=600
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            with tab2:
+                if show_volume:
+                    st.subheader("Analisis Volume Transaksi")
+                    fig_vol = go.Figure()
+                    fig_vol.add_trace(go.Bar(
+                        x=df['Date'],
+                        y=df['Volume'],
+                        name="Volume"
+                    ))
+                    fig_vol.update_layout(
+                        title=f"Volume Transaksi {selected_option}",
+                        yaxis_title="Volume",
+                        xaxis_title="Tanggal",
+                        height=400
+                    )
+                    st.plotly_chart(fig_vol, use_container_width=True)
+
+            with tab3:
+                st.subheader("Analisis Dividen")
+                try:
+                    df_dividen = get_data_from_csv(f'dataset_dividen/Deviden Yield Percentage {selected_option}.csv')
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        fig_div = px.bar(
+                            df_dividen,
+                            x='Tahun',
+                            y='Jumlah Dividen',
+                            title=f"Total Dividen {selected_option} per Tahun"
                         )
-                        st.plotly_chart(fig_vol, use_container_width=True)
-
-                with tab3:
-                    st.subheader("Analisis Dividen")
-                    try:
-                        df_dividen = get_data_from_csv(f'dataset_dividen/Deviden Yield Percentage {selected_option}.csv')
-                        
-                        if not df_dividen.empty:
-                            # Filter berdasarkan periode yang dipilih
-                            if period == 'custom':
-                                # Untuk rentang tanggal kustom
-                                start_year = pd.to_datetime(start_date).year
-                                end_year = pd.to_datetime(end_date).year
-                                filtered_dividen = df_dividen[
-                                    (df_dividen['Tahun'] >= start_year) & 
-                                    (df_dividen['Tahun'] <= end_year)
-                                ]
-                            elif period != 'max':
-                                # Untuk periode preset
-                                end_year = pd.Timestamp.now().year
-                                years_map = {
-                                    '10y': 10,
-                                    '5y': 5,
-                                    '3y': 3,
-                                    '1y': 1,
-                                    '6mo': 1,  # Untuk periode < 1 tahun, ambil data 1 tahun terakhir
-                                    '3mo': 1,
-                                    '1mo': 1
-                                }
-                                years_back = years_map.get(period, 0)
-                                start_year = end_year - years_back
-                                filtered_dividen = df_dividen[
-                                    (df_dividen['Tahun'] >= start_year)
-                                ]
-                            else:
-                                filtered_dividen = df_dividen.copy()
-
-                            if not filtered_dividen.empty:
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    fig_div = px.bar(
-                                        filtered_dividen,
-                                        x='Tahun',
-                                        y='Jumlah Dividen',
-                                        title=f"Total Dividen {selected_option} ({selected_period})"
-                                    )
-                                    fig_div.update_layout(
-                                        yaxis_title="Jumlah Dividen (Rp)",
-                                        xaxis_title="Tahun"
-                                    )
-                                    st.plotly_chart(fig_div, use_container_width=True)
-                                
-                                with col2:
-                                    fig_yield = px.bar(
-                                        filtered_dividen,
-                                        x='Tahun',
-                                        y='Yield Percentage',
-                                        title=f"Dividend Yield {selected_option} % ({selected_period})"
-                                    )
-                                    fig_yield.update_layout(
-                                        yaxis_title="Dividend Yield (%)",
-                                        xaxis_title="Tahun"
-                                    )
-                                    st.plotly_chart(fig_yield, use_container_width=True)
-
-                                # Tampilkan statistik untuk periode yang dipilih
-                                st.subheader(f"Statistik Dividen {selected_period}")
-                                stats = {
-                                    'Total Dividen': f"Rp {filtered_dividen['Jumlah Dividen'].sum():,.2f}",
-                                    'Rata-rata Dividen': f"Rp {filtered_dividen['Jumlah Dividen'].mean():,.2f}",
-                                    'Dividen Tertinggi': f"Rp {filtered_dividen['Jumlah Dividen'].max():,.2f}",
-                                    'Rata-rata Yield': f"{filtered_dividen['Yield Percentage'].mean():.2f}%",
-                                    'Yield Tertinggi': f"{filtered_dividen['Yield Percentage'].max():.2f}%"
-                                }
-                                
-                                # Tampilkan statistik dalam format yang lebih menarik
-                                col1, col2, col3, col4, col5 = st.columns(5)
-                                for col, (label, value) in zip(
-                                    [col1, col2, col3, col4, col5], 
-                                    stats.items()
-                                ):
-                                    with col:
-                                        st.metric(label=label, value=value)
-                            else:
-                                st.warning(f"Tidak ada data dividen untuk periode {selected_period}")
-                        else:
-                            st.warning("Data dividen tidak tersedia")
-                        
-                    except FileNotFoundError:
-                        st.warning(f"File data dividen untuk {selected_option} tidak ditemukan")
-                    except Exception as e:
-                        st.error(f"Terjadi kesalahan dalam memproses data dividen: {str(e)}")
+                        st.plotly_chart(fig_div, use_container_width=True)
+                    
+                    with col2:
+                        fig_yield = px.bar(
+                            df_dividen,
+                            x='Tahun',
+                            y='Yield Percentage',
+                            title=f"Dividend Yield {selected_option} (%)"
+                        )
+                        st.plotly_chart(fig_yield, use_container_width=True)
+                    
+                except Exception as e:
+                    st.error(f"Data dividen untuk {selected_option} tidak tersedia")
 
         except Exception as e:
-            st.error(f"Terjadi kesalahan dalam memproses data: {str(e)}")
+            st.error(f"Terjadi kesalahan dalam memproses data: {e}")
